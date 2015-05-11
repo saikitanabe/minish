@@ -21,7 +21,7 @@ Snippets directory contains utils that can be used to find minished files in Go 
 Usage
 =====
 
-minish <unminified javascript file> <output dir>
+minish \<unminified javascript file\> \<output dir\>
 
 Dependencies
 ------------
