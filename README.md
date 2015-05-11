@@ -1,7 +1,7 @@
 Minish
 ======
 
-Simple helper written in Go to hash JavaScript file name. Helps to load newest file with the web page. Hashed names allow to utilize long cache expiration times, e.g. Cache-Control:max-age=2592000.
+Simple helper written in Go to hash JavaScript file name. Hashed names helps to load newest file with the web page. Hashed names allow to utilize long cache expiration times, e.g. Cache-Control:max-age=2592000.
 
 After minish browsers, CDNs and other caching proxies will not prevent loading the latest versions of your application.
 
