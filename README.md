@@ -3,7 +3,9 @@ Minish
 
 Simple helper written in Go to hash JavaScript file name. Hashed names help to load newest file with the web page. Hashed names allow to utilize long cache expiration times, e.g. Cache-Control:max-age=2592000.
 
-After minishing javascript files, browsers CDNs and other caching proxies will not prevent loading the latest versions of your application.
+Make sure that latest JavaScript files are loaded. After minishing javascript files, browsers CDNs and other caching proxies will not prevent loading the latest versions of your application.
+
+![Load hashed JavaScript file](minish.png)
 
 Removes previously minified files from the output folder that ends with the -<filename>.min.js.
 
