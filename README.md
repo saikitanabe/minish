@@ -1,9 +1,9 @@
 Minish
 ======
 
-Simple helper to hash JavaScript file name that newest file will be always loaded with the web page. Hashed names allow to utilize long cache expiration times, e.g. Cache-Control:max-age=2592000.
+Simple helper written in Go to hash JavaScript file name. Helps to load newest file with the web page. Hashed names allow to utilize long cache expiration times, e.g. Cache-Control:max-age=2592000.
 
-Browsers, CDNs and other caching proxies will not prevent loading the latest versions of your application.
+After minish browsers, CDNs and other caching proxies will not prevent loading the latest versions of your application.
 
 Removes previously minified files from the output folder that ends with the -<filename>.min.js.
 
@@ -15,7 +15,7 @@ go run main.go example.js dist
 Snippets
 --------
 
-Snippets directory contains utils that can be used to find minished files in Go and Scala. Those can be used find latest hashed version on boot e.g. on web application boot.
+Snippets directory contains utils that can be used to find minished files in Go and Scala. Those can be used find latest hashed version e.g. on web application boot.
 
 
 Usage
