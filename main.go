@@ -4,6 +4,7 @@ import (
 	// "bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,6 +13,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+)
+
+var (
+	cssMode = flag.Bool("css", false, "minify and hash css file")
 )
 
 func removeFiles(dir, filenameEnding string) {
@@ -37,7 +42,7 @@ func removeFiles(dir, filenameEnding string) {
 	}
 }
 
-func minify(src, to string) (string, error) {
+func minify(src, to string, css bool) (string, error) {
 	filename := filepath.Base(src)
 	ext := filepath.Ext(src)
 	name := strings.TrimSuffix(filename, ext)
@@ -45,9 +50,17 @@ func minify(src, to string) (string, error) {
 	target := fmt.Sprintf("%s/%s", to, minfilename)
 
 	removeFiles(to, minfilename)
-	cmd := exec.Command("uglifyjs", src, "-o", target, "-c", "-m")
 
-	output, err := cmd.CombinedOutput()
+	cmd := func() *exec.Cmd {
+		switch {
+		case css:
+			return exec.Command("cleancss", src, "-o", target)
+		default:
+			return exec.Command("uglifyjs", src, "-o", target, "-c", "-m")
+		}
+	}
+
+	output, err := cmd().CombinedOutput()
 
 	if err != nil {
 		fmt.Println(fmt.Sprint(err) + ": " + string(output))
@@ -80,18 +93,32 @@ func hashRename(path string) (string, error) {
 }
 
 func usage() {
-	fmt.Println(`minify <unminified javascript file name> <output dir>`)
+	fmt.Println(`minify [-css] <unminified file name> <output dir>`)
 }
 
 func main() {
-	if len(os.Args) != 3 {
+	flag.Parse()
+
+	if *cssMode && len(os.Args) != 4 {
 		usage()
 		return
 	}
-	src := os.Args[1]
-	to := os.Args[2]
+	if len(os.Args) != 3 && !*cssMode {
+		fmt.Println("hops")
+		usage()
+		return
+	}
 
-	minified, err := minify(src, to)
+	baseIndex := func() int {
+		if *cssMode {
+			return 2
+		}
+		return 1
+	}
+	src := os.Args[baseIndex()]
+	to := os.Args[baseIndex()+1]
+
+	minified, err := minify(src, to, *cssMode)
 	if err != nil {
 		log.Fatal(err)
 	}
