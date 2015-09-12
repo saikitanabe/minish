@@ -10,10 +10,13 @@ Makes sure that latest JavaScript files are loaded. After minishing javascript f
 Removes previously minified files from the output folder that ends with the -<filename>.min.js | <filename>.min.css
 
 Examples:
+
 go run main.go example.js dist
+
 => dist/3a25a3cfb1481a9b3496ca870564dff5-example.min.js
 
 go run main.go -css example.css dist
+
 => dist/d560e98e1b167635837291f8e54628e3-example.min.css
 
 
