@@ -1,7 +1,6 @@
 package main
 
 import (
-	// "bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"flag"
@@ -19,11 +18,81 @@ var (
 	cssMode = flag.Bool("css", false, "minify and hash css file")
 )
 
-func removeFiles(dir, filenameEnding string) {
+func usage() {
+	fmt.Println(`minify [-css] <unminified file names (comma separated list)> <output>
+
+output:
+	- if only 1 file uses that as minified output file name
+	- in case of multiple files output needs to end with .js or .css	
+`)
+}
+
+func main() {
+	flag.Parse()
+
+	if *cssMode && len(os.Args) != 4 {
+		usage()
+		return
+	}
+
+	if len(os.Args) != 3 && !*cssMode {
+		usage()
+		return
+	}
+
+	baseIndex := func() int {
+		if *cssMode {
+			return 2
+		}
+		return 1
+	}
+
+	src := os.Args[baseIndex()]
+	to := os.Args[baseIndex()+1]
+
+	from, err := makeInput(src, to)
+	if err != nil {
+		log.Fatalln("Failed to make input", err)
+	}
+
+	minified, err := minify(from, to, *cssMode)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	hashedName, err := hashRename(minified)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Minified:", filepath.Base(hashedName))
+}
+
+func resolveDir(to string) (string, error) {
+	dir := to
+	stat, err := os.Stat(to)
+	if err != nil {
+		return "", err
+	}
+
+	if !stat.IsDir() {
+		// this is a file, so resolve base directory
+		filename := filepath.Base(to)
+		dir = strings.TrimSuffix(to, string(filepath.Separator)+filename)
+	}
+	return dir, nil
+}
+
+func removeFiles(to, filenameEnding string) error {
+	dir, err := resolveDir(to)
+	if err != nil {
+		return err
+	}
+
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		log.Println("ERROR: Failed to read dir", dir)
-		return
+		return err
 	}
 
 	regExp := fmt.Sprintf(`(^\S+-%s)`, strings.Replace(filenameEnding, ".", "\\.", -1))
@@ -34,22 +103,25 @@ func removeFiles(dir, filenameEnding string) {
 			fullpath := fmt.Sprintf("%s/%s", dir, file.Name())
 			err := os.Remove(fullpath)
 			if err != nil {
-				log.Fatal(err)
-			} else {
-				fmt.Println("Removed:", file.Name())
+				return err
 			}
+
+			fmt.Println("Removed:", file.Name())
 		}
 	}
+	return err
 }
 
 func minify(src, to string, css bool) (string, error) {
-	filename := filepath.Base(src)
-	ext := filepath.Ext(src)
-	name := strings.TrimSuffix(filename, ext)
-	minfilename := name + ".min" + ext
-	target := fmt.Sprintf("%s/%s", to, minfilename)
+	target, minfilename, err := targetName(src, to, ".min")
+	if err != nil {
+		return "", err
+	}
 
-	removeFiles(to, minfilename)
+	err = removeFiles(to, minfilename)
+	if err != nil {
+		return "", err
+	}
 
 	cmd := func() *exec.Cmd {
 		switch {
@@ -67,6 +139,20 @@ func minify(src, to string, css bool) (string, error) {
 	}
 
 	return target, err
+}
+
+func targetName(src, to, extra string) (string, string, error) {
+	filename := filepath.Base(src)
+	ext := filepath.Ext(src)
+	name := strings.TrimSuffix(filename, ext)
+	minfilename := name + extra + ext
+
+	dir, err := resolveDir(to)
+	if err != nil {
+		return "", "", err
+	}
+
+	return fmt.Sprintf("%s/%s", dir, minfilename), minfilename, nil
 }
 
 func hash(path string) (string, error) {
@@ -92,41 +178,71 @@ func hashRename(path string) (string, error) {
 	return newname, os.Rename(path, newname)
 }
 
-func usage() {
-	fmt.Println(`minify [-css] <unminified file name> <output dir>`)
+func makeInput(src, to string) (string, error) {
+	// by default only one input file
+	result := src
+
+	if isMultipleFiles(src) {
+		var err error
+		err = concatFiles(src, to)
+		if err != nil {
+			return "", err
+		}
+
+		result = to
+	}
+
+	return result, nil
 }
 
-func main() {
-	flag.Parse()
+func isMultipleFiles(src string) bool {
+	splitted := strings.Split(src, ",")
+	return len(splitted) > 1
+}
 
-	if *cssMode && len(os.Args) != 4 {
-		usage()
-		return
-	}
-	if len(os.Args) != 3 && !*cssMode {
-		fmt.Println("hops")
-		usage()
-		return
+func concatFiles(src, output string) error {
+	ext := filepath.Ext(src)
+	concat, err := concatFilesInMemory(src, ext)
+	if err != nil {
+		return err
 	}
 
-	baseIndex := func() int {
-		if *cssMode {
-			return 2
+	data := []byte(concat)
+
+	if _, err := os.Stat(output); os.IsExist(err) {
+		return fmt.Errorf("file already exists, cannot overwrite %s", output)
+	}
+
+	err = ioutil.WriteFile(output, data, 0644)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func concatFilesInMemory(src, outputExt string) (string, error) {
+	result := ""
+	fmt.Println("Concateniting")
+
+	for _, file := range strings.Split(src, ",") {
+		fmt.Println(file)
+
+		data, err := ioutil.ReadFile(file)
+		if err != nil {
+			return "", err
 		}
-		return 1
-	}
-	src := os.Args[baseIndex()]
-	to := os.Args[baseIndex()+1]
 
-	minified, err := minify(src, to, *cssMode)
-	if err != nil {
-		log.Fatal(err)
-	}
+		ext := filepath.Ext(file)
+		if ext != outputExt {
+			return "", fmt.Errorf(
+				"Extension differs for file %s output ext %s",
+				file,
+				outputExt,
+			)
+		}
 
-	hashedName, err := hashRename(minified)
-
-	if err != nil {
-		log.Fatal(err)
+		result += string(data)
 	}
-	fmt.Println("Minified:", filepath.Base(hashedName))
+	return result, nil
 }
