@@ -1,3 +1,6 @@
 dist/*
 minish
 snippets/scala/target/*
+example.min.js
+
+second.min.js

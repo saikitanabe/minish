@@ -50,48 +50,45 @@ func main() {
 	src := os.Args[baseIndex()]
 	to := os.Args[baseIndex()+1]
 
-	from, err := makeInput(src, to)
+	minified, err := minifyFiles(src, to, *cssMode)
 	if err != nil {
-		log.Fatalln("Failed to make input", err)
+		log.Fatalln("minify failed", err)
 	}
-
-	minified, err := minify(from, to, *cssMode)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	hashedName, err := hashRename(minified)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println("Minified:", filepath.Base(hashedName))
+	// fmt.Println("Minified:", hashedName)
 }
 
 func resolveDir(to string) (string, error) {
 	dir := to
+
 	stat, err := os.Stat(to)
-	if err != nil {
-		return "", err
+	switch {
+	case err == nil && stat.IsDir():
+	default:
+		// this is most probably a file, resolve dir from file path
+		dir = filepath.Dir(to)
 	}
 
-	if !stat.IsDir() {
-		// this is a file, so resolve base directory
-		filename := filepath.Base(to)
-		dir = strings.TrimSuffix(to, string(filepath.Separator)+filename)
+	stat, _ = os.Stat(dir)
+	if stat.IsDir() {
+		// still check if dir
+		return dir, nil
 	}
-	return dir, nil
+
+	return "", fmt.Errorf("Failed to resolve dir from %s", to)
 }
 
 func removeFiles(to, filenameEnding string) error {
-	dir, err := resolveDir(to)
-	if err != nil {
-		return err
-	}
+	log.Println("removeFiles", to, filenameEnding)
 
-	files, err := ioutil.ReadDir(dir)
+	files, err := ioutil.ReadDir(to)
 	if err != nil {
-		log.Println("ERROR: Failed to read dir", dir)
+		log.Println("ERROR: Failed to read dir", to)
 		return err
 	}
 
@@ -100,7 +97,7 @@ func removeFiles(to, filenameEnding string) error {
 
 	for _, file := range files {
 		if fileRegExp.MatchString(file.Name()) {
-			fullpath := fmt.Sprintf("%s/%s", dir, file.Name())
+			fullpath := fmt.Sprintf("%s/%s", to, file.Name())
 			err := os.Remove(fullpath)
 			if err != nil {
 				return err
@@ -112,8 +109,74 @@ func removeFiles(to, filenameEnding string) error {
 	return err
 }
 
+func minifyFiles(src, to string, css bool) (string, error) {
+	if isMultipleFiles(src) {
+		minifiedFiles, err := minifyMultipleFiles(src, to, css)
+		if err != nil {
+			return "", err
+		}
+
+		return concatFiles2(minifiedFiles, to)
+	}
+
+	minified, err := minify(src, to, css)
+	if err != nil {
+		return "", err
+	}
+
+	return minified, nil
+}
+
+func minifyMultipleFiles(src, to string, css bool) ([]string, error) {
+	var result []string
+
+	err := removeMinifiedVersion(to, to)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, file := range strings.Split(src, ",") {
+		dir, err := resolveDir(to)
+		if err != nil {
+			return nil, err
+		}
+		minified, err := minify(file, dir, css)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, minified)
+	}
+	return result, nil
+}
+
+func removeMinifiedVersion(src, to string) error {
+	log.Println("removeMinifiedVersion", src, to)
+
+	_, minfilename, err := targetName(src, to, ".min")
+	if err != nil {
+		return err
+	}
+
+	dir, err := resolveDir(to)
+	if err != nil {
+		return err
+	}
+
+	err = removeFiles(dir, minfilename)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func minify(src, to string, css bool) (string, error) {
+	fmt.Println("Minifying", src, to)
+
 	target, minfilename, err := targetName(src, to, ".min")
+
+	log.Println("minify:", target, minfilename)
+
 	if err != nil {
 		return "", err
 	}
@@ -136,6 +199,12 @@ func minify(src, to string, css bool) (string, error) {
 
 	if err != nil {
 		fmt.Println(fmt.Sprint(err) + ": " + string(output))
+		return "", err
+	}
+
+	if _, err := os.Stat(target); os.IsNotExist(err) {
+		fmt.Println("Failed to create minified file", target)
+		return "", err
 	}
 
 	return target, err
@@ -198,6 +267,27 @@ func makeInput(src, to string) (string, error) {
 func isMultipleFiles(src string) bool {
 	splitted := strings.Split(src, ",")
 	return len(splitted) > 1
+}
+
+func concatFiles2(files []string, to string) (string, error) {
+	f, err := os.OpenFile(to, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return "", err
+	}
+
+	defer f.Close()
+
+	for _, file := range files {
+		data, err := ioutil.ReadFile(file)
+		if err != nil {
+			return "", err
+		}
+
+		if _, err = f.WriteString(string(data)); err != nil {
+			return "", err
+		}
+	}
+	return to, nil
 }
 
 func concatFiles(src, output string) error {
