@@ -171,17 +171,29 @@ func removeMinifiedVersion(src, to string) error {
 }
 
 func minify(src, to string, css bool) (string, error) {
-	fmt.Println("Minifying", src, to)
+	fmt.Printf("Minifying %s to %s\n", src, to)
 
-	target, minfilename, err := targetName(src, to, ".min")
+	getTargetName := func() (string, error) {
+		if css && strings.HasSuffix(to, ".css") {
+			return to, nil
+		}
 
-	log.Println("minify:", target, minfilename)
+		target, minfilename, err := targetName(src, to, ".min")
+		log.Println("minify:", target, minfilename)
 
-	if err != nil {
-		return "", err
+		if err != nil {
+			return "", err
+		}
+
+		err = removeFiles(to, minfilename)
+		if err != nil {
+			return "", err
+		}
+
+		return target, nil
 	}
 
-	err = removeFiles(to, minfilename)
+	target, err := getTargetName()
 	if err != nil {
 		return "", err
 	}

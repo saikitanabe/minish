@@ -6,6 +6,7 @@ dev:
 test: build
 	./minish example.js dist
 	./minish -css example.css dist
+	./minish -css example.css dist/example.min.css
 	./minish example.js,second.js dist/bundle.js
 
 build: 
