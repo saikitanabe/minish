@@ -29,7 +29,27 @@ Snippets directory contains utils that can be used to find minished files in Go 
 Usage
 =====
 
-minish \<unminified javascript file\> \<output dir\>
+```
+# Minifies example.js as dist/<md5sum>-example.min.js
+./minish example.js dist
+```
+
+```
+# Minifies example.js and second.js concatenated as dist/<md5sum>-bundle.js
+./minish example.js,second.js dist/bundle.js
+```
+
+```
+# Minifies css example.css as dist/<md5sum>-example.min.css
+./minish -css example.css dist
+```
+
+```
+# Minifies css example.css as dist/<md5sum>-example-test.css
+./minish -css example.css dist/example-test.css
+```
+
+
 
 Dependencies
 ------------
