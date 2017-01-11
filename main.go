@@ -54,13 +54,22 @@ func main() {
 	if err != nil {
 		log.Fatalln("minify failed", err)
 	}
-	hashedName, err := hashRename(minified)
 
+	doHash := func() (string, error) {
+
+		if minified.rename {
+			return hashRename(minified.target)
+		}
+
+		return minified.target, nil
+	}
+
+	hashedName, err := doHash()
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	fmt.Println("Minified:", filepath.Base(hashedName))
-	// fmt.Println("Minified:", hashedName)
 }
 
 func resolveDir(to string) (string, error) {
@@ -109,11 +118,11 @@ func removeFiles(to, filenameEnding string) error {
 	return err
 }
 
-func minifyFiles(src, to string, css bool) (string, error) {
+func minifyFiles(src, to string, css bool) (*minifiedResult, error) {
 	if isMultipleFiles(src) {
 		minifiedFiles, err := minifyMultipleFiles(src, to, css)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		return concatFiles2(minifiedFiles, to)
@@ -121,7 +130,7 @@ func minifyFiles(src, to string, css bool) (string, error) {
 
 	minified, err := minify(src, to, css)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	return minified, nil
@@ -144,7 +153,7 @@ func minifyMultipleFiles(src, to string, css bool) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, minified)
+		result = append(result, minified.target)
 	}
 	return result, nil
 }
@@ -170,40 +179,45 @@ func removeMinifiedVersion(src, to string) error {
 	return nil
 }
 
-func minify(src, to string, css bool) (string, error) {
+type minifiedResult struct {
+	target string
+	rename bool
+}
+
+func minify(src, to string, css bool) (*minifiedResult, error) {
 	fmt.Printf("Minifying %s to %s\n", src, to)
 
-	getTargetName := func() (string, error) {
+	getTargetName := func() (*minifiedResult, error) {
 		if css && strings.HasSuffix(to, ".css") {
-			return to, nil
+			return &minifiedResult{target: to, rename: false}, nil
 		}
 
 		target, minfilename, err := targetName(src, to, ".min")
 		log.Println("minify:", target, minfilename)
 
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		err = removeFiles(to, minfilename)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
-		return target, nil
+		return &minifiedResult{target: target, rename: true}, nil
 	}
 
-	target, err := getTargetName()
+	result, err := getTargetName()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	cmd := func() *exec.Cmd {
 		switch {
 		case css:
-			return exec.Command("cleancss", src, "-o", target)
+			return exec.Command("cleancss", src, "-o", result.target)
 		default:
-			return exec.Command("uglifyjs", src, "-o", target, "-c", "-m")
+			return exec.Command("uglifyjs", src, "-o", result.target, "-c", "-m")
 		}
 	}
 
@@ -211,15 +225,15 @@ func minify(src, to string, css bool) (string, error) {
 
 	if err != nil {
 		fmt.Println(fmt.Sprint(err) + ": " + string(output))
-		return "", err
+		return nil, err
 	}
 
-	if _, err := os.Stat(target); os.IsNotExist(err) {
-		fmt.Println("Failed to create minified file", target)
-		return "", err
+	if _, err := os.Stat(result.target); os.IsNotExist(err) {
+		fmt.Println("Failed to create minified file", result.target)
+		return nil, err
 	}
 
-	return target, err
+	return result, err
 }
 
 func targetName(src, to, extra string) (string, string, error) {
@@ -281,10 +295,10 @@ func isMultipleFiles(src string) bool {
 	return len(splitted) > 1
 }
 
-func concatFiles2(files []string, to string) (string, error) {
+func concatFiles2(files []string, to string) (*minifiedResult, error) {
 	f, err := os.OpenFile(to, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	defer f.Close()
@@ -292,14 +306,14 @@ func concatFiles2(files []string, to string) (string, error) {
 	for _, file := range files {
 		data, err := ioutil.ReadFile(file)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		if _, err = f.WriteString(string(data)); err != nil {
-			return "", err
+			return nil, err
 		}
 	}
-	return to, nil
+	return &minifiedResult{target: to, rename: true}, nil
 }
 
 func concatFiles(src, output string) error {

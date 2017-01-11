@@ -5,10 +5,10 @@ dev:
 	
 test: build
 	./minish example.js dist
+	./minish example.js,second.js dist/bundle.min.js
 	./minish -css example.css dist
-	./minish -css example.css dist/example.min.css
-	./minish example.js,second.js dist/bundle.js
+	./minish -css example.css dist/example-1.0.min.css
 
-build: 
+build:
 	go build -o minish
 	cp minish ~/bin/
