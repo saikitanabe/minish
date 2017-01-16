@@ -215,7 +215,9 @@ func minify(src, to string, css bool) (*minifiedResult, error) {
 	cmd := func() *exec.Cmd {
 		switch {
 		case css:
-			return exec.Command("cleancss", src, "-o", result.target)
+			// --skip-rebase do not rewrite css relative urls
+			// this could be a desired option too...
+			return exec.Command("cleancss", "--skip-rebase", src, "-o", result.target)
 		default:
 			return exec.Command("uglifyjs", src, "-o", result.target, "-c", "-m")
 		}
