@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -98,7 +100,7 @@ func removeFiles(to, filenameEnding string) error {
 	files, err := ioutil.ReadDir(to)
 	if err != nil {
 		log.Println("ERROR: Failed to read dir", to)
-		return err
+		return errors.Wrapf(err, "removeFiles: failed to read dir %s", to)
 	}
 
 	regExp := fmt.Sprintf(`(^\S+-%s)`, strings.Replace(filenameEnding, ".", "\\.", -1))
@@ -109,7 +111,7 @@ func removeFiles(to, filenameEnding string) error {
 			fullpath := fmt.Sprintf("%s/%s", to, file.Name())
 			err := os.Remove(fullpath)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "removeFiles: remove failed %s", fullpath)
 			}
 
 			fmt.Println("Removed:", file.Name())
@@ -122,7 +124,7 @@ func minifyFiles(src, to string, css bool) (*minifiedResult, error) {
 	if isMultipleFiles(src) {
 		minifiedFiles, err := minifyMultipleFiles(src, to, css)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "minifyFiles: minify multiple files src %s to %s", src, to)
 		}
 
 		return concatFiles2(minifiedFiles, to)
@@ -130,7 +132,7 @@ func minifyFiles(src, to string, css bool) (*minifiedResult, error) {
 
 	minified, err := minify(src, to, css)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "minifyFiles: src %s to %s", src, to)
 	}
 
 	return minified, nil
@@ -151,7 +153,7 @@ func minifyMultipleFiles(src, to string, css bool) ([]string, error) {
 		}
 		minified, err := minify(file, dir, css)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "minifyMultipleFiles: minify")
 		}
 		result = append(result, minified.target)
 	}
@@ -173,7 +175,7 @@ func removeMinifiedVersion(src, to string) error {
 
 	err = removeFiles(dir, minfilename)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "removeMinifiedVersion: remove files %s %s", dir, minfilename)
 	}
 
 	return nil
@@ -196,12 +198,12 @@ func minify(src, to string, css bool) (*minifiedResult, error) {
 		log.Println("minify:", target, minfilename)
 
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "minify: target name src %s to %s", src, to)
 		}
 
 		err = removeFiles(to, minfilename)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "minify: remove files to %s", to)
 		}
 
 		return &minifiedResult{target: target, rename: true}, nil
@@ -209,7 +211,7 @@ func minify(src, to string, css bool) (*minifiedResult, error) {
 
 	result, err := getTargetName()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "get target name")
 	}
 
 	cmd := func() *exec.Cmd {
@@ -221,18 +223,18 @@ func minify(src, to string, css bool) (*minifiedResult, error) {
 		default:
 			return exec.Command("uglifyjs", src, "-o", result.target, "-c", "-m")
 		}
-	}
+	}()
 
-	output, err := cmd().CombinedOutput()
+	output, err := cmd.CombinedOutput()
 
 	if err != nil {
 		fmt.Println(fmt.Sprint(err) + ": " + string(output))
-		return nil, err
+		return nil, errors.Wrapf(err, "minify: cmd failed %v", cmd)
 	}
 
 	if _, err := os.Stat(result.target); os.IsNotExist(err) {
 		fmt.Println("Failed to create minified file", result.target)
-		return nil, err
+		return nil, errors.Wrapf(err, "minify: failed to create minified file %s", result.target)
 	}
 
 	return result, err
