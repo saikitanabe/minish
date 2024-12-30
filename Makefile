@@ -11,4 +11,5 @@ test: build
 
 build:
 	go build -o minish
-	cp minish ~/bin/
+	rm ~/bin/minish
+	cp minish ~/bin/minish
